@@ -1,72 +1,73 @@
-name: PaperReader
+name: Lunar Paper Digest
 
 on:
   schedule:
-    - cron: '0 22 * * *'
+    # UTC 00:00 = Asia/Shanghai 08:00; Actions can start late.
+    - cron: '0 0 * * *'
   workflow_dispatch:
+    inputs:
+      mode:
+        description: 'preview only saves a report; send also emails it'
+        type: choice
+        options:
+          - preview
+          - send
+        default: preview
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lunar-paper-digest
+  cancel-in-progress: false
 
 jobs:
-  run-python:
+  digest:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write # 新增：允许写入仓库（push 权限）
+    timeout-minutes: 25
     env:
+      TZ: Asia/Shanghai
+      DIGEST_MODE: ${{ github.event_name == 'schedule' && 'send' || inputs.mode }}
+      SENDER_EMAIL: ${{ secrets.SENDER_EMAIL }}
+      RECEIVER_EMAIL: ${{ secrets.RECEIVER_EMAIL }}
+      SENDER_PASS: ${{ secrets.SENDER_PASS }}
+      SMTP_SERVER: smtp.qq.com
+      SMTP_PORT: '465'
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       OPENAI_API_BASE: ${{ secrets.OPENAI_API_BASE }}
-      MODEL_PROVIDER: ${{ secrets.MODEL_PROVIDER }}
       MODEL: ${{ secrets.MODEL }}
-      SEARCH_TEXT: ${{ secrets.SEARCH_TEXT }}
-      ARXIV_COUNT: ${{ secrets.ARXIV_COUNT }}
-      CROSSREF_COUNT: ${{ secrets.CROSSREF_COUNT }}
-      SENDER_EMAIL: ${{ secrets.SENDER_EMAIL }}
-      SENDER_PASS: ${{ secrets.SENDER_PASS }}
-      RECEIVER_EMAIL: ${{ secrets.RECEIVER_EMAIL }}
-      SMTP_SERVER: ${{ secrets.SMTP_SERVER }}
-      SMTP_PORT: ${{ secrets.SMTP_PORT }}
-
+      LOOKBACK_DAYS: '7'
+      MAX_PAPERS: '5'
+      REQUEST_TIMEOUT: '45'
+      LLM_TIMEOUT: '90'
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v6
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v6
+          python-version: '3.12'
+      - name: Install digest dependencies
+        run: python -m pip install -r requirements-digest.txt
+      - name: Restore delivered-paper IDs
+        id: history
+        uses: actions/cache/restore@v4
         with:
-          enable-cache: true
-          version: "0.9.7"
-
-      - name: Install Chrome
-        uses: browser-actions/setup-chrome@v1
+          path: .digest-state
+          key: lunar-digest-v1-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: lunar-digest-v1-
+      - name: Retrieve papers and prepare or send digest
+        run: python src/lunar_digest.py
+      - name: Save delivered-paper IDs after successful email
+        if: success() && env.DIGEST_MODE == 'send'
+        uses: actions/cache/save@v4
         with:
-          chrome-version: 130.0.6723.58
-
-      - name: Synchronous Dependencies
-        run: uv sync --locked --all-extras --dev
-      - name: Ensure output directories exist # 新增：预创建目录
-        run: |
-          mkdir -p papers
-          mkdir -p runlog
-          echo "Directories ready: $(pwd)/papers"
-
-      - name: Run main.py
-        run: uv run src/main.py
-
-      - name: Commit generated papers to repository # 新增：commit 文件
-        run: |
-          git config --local user.email "actions@github.com"
-          git config --local user.name "GitHub Actions"
-          git add papers/ || true  # 添加 papers 文件夹（如果为空，忽略错误）
-          git add runlog/ || true  # 可选：也添加日志
-          git diff --staged --quiet || git commit -m "Add generated papers and logs from run ${{ github.run_number }}"  # 只在有变化时 commit
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Push changes to repository # 新增：push 到仓库
-        uses: ad-m/github-push-action@v0.8.0 # 使用官方 Action 简化 push（可选，手动 git push 也行）
+          path: .digest-state
+          key: lunar-digest-v1-${{ github.run_id }}-${{ github.run_attempt }}
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          branch: ${{ github.ref_name }} # push 到当前分支
+          name: lunar-digest-${{ github.run_id }}-${{ github.run_attempt }}
+          path: digest-output/
+          if-no-files-found: ignore
+          retention-days: 14
