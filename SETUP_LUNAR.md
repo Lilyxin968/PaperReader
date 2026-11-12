@@ -25,15 +25,14 @@
 
 | 名称 | 内容 |
 |---|---|
-| SENDER_EMAIL | 你确认使用的 Gmail 发件邮箱 |
+| SENDER_EMAIL | 你确认使用的 163 发件邮箱 |
 | RECEIVER_EMAIL | 你确认的 QQ 收件邮箱 |
-| SENDER_PASS | 发件 Google 账号的 16 位应用专用密码，不是 Google 登录密码 |
+| SENDER_PASS | 163 邮箱的客户端授权码，不是邮箱登录密码 |
 
-邮件服务器已设为 smtp.gmail.com，SSL 端口 465。
-先在发件 Google 账号开启两步验证，再从 https://myaccount.google.com/apppasswords 创建名为 PaperReader 的应用专用密码。
-由账号本人完成身份验证与密码生成，将应用专用密码直接保存到 SENDER_PASS；不要放进代码或聊天。
-应用专用密码帮助：https://support.google.com/accounts/answer/185833?hl=zh-Hans
-若账号不提供应用专用密码，需确认 Google 账号的安全设置或管理策略；仅替换邮箱地址不会完成发送配置。
+邮件服务器已设为 smtp.163.com，SSL 端口 465。
+在 163 网页邮箱进入“设置 → POP3/SMTP/IMAP”，开启 SMTP 相关服务，按页面要求完成身份验证并获取客户端授权码。
+由账号本人完成身份验证与授权码生成，将授权码直接保存到 SENDER_PASS；不要放进代码或聊天。
+更换发件邮箱后，要同时更新 SENDER_EMAIL 和 SENDER_PASS。收件邮箱仍使用已确认的 QQ 邮箱。
 邮箱地址和授权码只放 Secrets，不填入代码、截图、聊天或 README。
 没有配置齐这三项，定时发送会明确失败，不会假装已启用。
 
