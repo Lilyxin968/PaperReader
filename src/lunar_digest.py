@@ -265,7 +265,7 @@ def send_email(body, count):
     message.set_content(text(body))
     message.add_alternative(body, subtype="html")
     # A clean SMTP DATA acceptance is required before marking papers delivered.
-    smtp = smtplib.SMTP_SSL(os.getenv("SMTP_SERVER", "smtp.qq.com"),
+    smtp = smtplib.SMTP_SSL(os.getenv("SMTP_SERVER", "smtp.gmail.com"),
                            int(os.getenv("SMTP_PORT", "465")),
                            context=ssl.create_default_context(), timeout=60)
     try:
